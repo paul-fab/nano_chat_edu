@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(gh api:*)",
+      "Bash(xargs curl -sL)",
+      "Bash(curl:*)",
+      "WebSearch",
+      "Bash(scp:*)",
+      "Bash(ssh:*)"
+    ]
+  }
+}
