@@ -124,6 +124,37 @@ def patch_dataset(nanochat_dir: Path, shard_count: int) -> bool:
     return True
 
 
+def patch_common_tf32(nanochat_dir: Path) -> bool:
+    """Patch nanochat/common.py to avoid mixed TF32 API usage."""
+    common_path = nanochat_dir / "nanochat" / "common.py"
+
+    if not common_path.exists():
+        print(f"ERROR: {common_path} not found")
+        return False
+
+    content = common_path.read_text(encoding="utf-8")
+    original = content
+
+    old_line = '        torch.backends.fp32_precision = "tf32" # uses tf32 instead of fp32 for matmuls'
+    replacement = (
+        "        # Use legacy TF32 toggles to stay compatible with torch.compile/inductor checks\n"
+        "        torch.backends.cuda.matmul.allow_tf32 = True\n"
+        "        torch.backends.cudnn.allow_tf32 = True"
+    )
+
+    if old_line in content:
+        content = content.replace(old_line, replacement, 1)
+
+    if content == original:
+        print("No common.py TF32 changes needed -- already patched or unexpected format.")
+        return True
+
+    common_path.write_text(content, encoding="utf-8")
+    print(f"Patched {common_path}:")
+    print("  - Replaced torch.backends.fp32_precision with legacy TF32 flags")
+    return True
+
+
 def verify_patch(nanochat_dir: Path) -> bool:
     """Verify the patch was applied correctly."""
     dataset_path = nanochat_dir / "nanochat" / "dataset.py"
@@ -195,6 +226,8 @@ def main():
 
     # Apply patch
     if not patch_dataset(nanochat_dir, shard_count):
+        sys.exit(1)
+    if not patch_common_tf32(nanochat_dir):
         sys.exit(1)
 
     # Verify

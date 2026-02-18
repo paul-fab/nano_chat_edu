@@ -18,21 +18,23 @@ Requires .env with AZURE_STORAGE_ACCOUNT and AZURE_STORAGE_KEY.
 import math
 import os
 import shutil
+import subprocess
 import sys
 import time
 import argparse
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pyarrow.parquet as pq
 import pyarrow as pa
-from azure.storage.blob import BlobServiceClient, ContainerClient
+from azure.storage.blob import BlobServiceClient, ContainerClient, BlobSasPermissions, generate_container_sas
 from dotenv import load_dotenv
 
 load_dotenv()
 
 ACCOUNT = os.environ.get("AZURE_STORAGE_ACCOUNT", "quratingscoressa")
 KEY = os.environ.get("AZURE_STORAGE_KEY")
-CONTAINER = "quratingfiltered"
+CONTAINER = os.environ.get("AZURE_CONTAINER", "quratingfiltered")
 DATA_DIR = os.path.expanduser("~/.cache/nanochat/base_data")
 
 # Columns to drop (large embeddings we don't need for training)
@@ -53,20 +55,20 @@ if not KEY:
     sys.exit(1)
 
 
-def get_container_client() -> ContainerClient:
+def get_container_client(container_name: str) -> ContainerClient:
     conn_str = (
         f"DefaultEndpointsProtocol=https;"
         f"AccountName={ACCOUNT};"
         f"AccountKey={KEY};"
         f"EndpointSuffix=core.windows.net"
     )
-    return BlobServiceClient.from_connection_string(conn_str).get_container_client(CONTAINER)
+    return BlobServiceClient.from_connection_string(conn_str).get_container_client(container_name)
 
 
-def list_blobs(container_client: ContainerClient) -> list[str]:
+def list_blobs(container_client: ContainerClient, prefix: str | None = None) -> list[str]:
     """List all parquet blob names in the container, sorted."""
     blobs = []
-    for blob in container_client.list_blobs():
+    for blob in container_client.list_blobs(name_starts_with=prefix):
         if blob.name.endswith(".parquet"):
             blobs.append(blob.name)
     blobs.sort()
@@ -123,6 +125,141 @@ def download_shard(
                 time.sleep(wait)
             else:
                 return shard_index, f"error after {max_retries} retries: {e}", 0
+
+
+def transform_local_parquet_to_shard(
+    in_path: str,
+    out_path: str,
+) -> tuple[str, int]:
+    """Load local parquet, drop embedding-like columns, and write shard parquet."""
+    table = pq.read_table(in_path)
+    cols_to_drop = [c for c in table.column_names if c in DROP_COLUMNS]
+    if cols_to_drop:
+        table = table.drop(cols_to_drop)
+    if table.num_rows == 0:
+        return "warning: empty table", 0
+    tmp_path = out_path + ".tmp"
+    pq.write_table(table, tmp_path, compression="zstd")
+    os.rename(tmp_path, out_path)
+    return "done", os.path.getsize(out_path)
+
+
+def _run_azcopy_bulk_download(
+    *,
+    account: str,
+    key: str,
+    container: str,
+    prefix: str,
+    raw_dir: str,
+) -> bool:
+    """Use azcopy for high-throughput parquet transfer into raw_dir."""
+    if shutil.which("azcopy") is None:
+        print("azcopy not found in PATH; falling back to python download.")
+        return False
+
+    expiry = datetime.now(timezone.utc) + timedelta(hours=12)
+    sas = generate_container_sas(
+        account_name=account,
+        container_name=container,
+        account_key=key,
+        permission=BlobSasPermissions(read=True, list=True),
+        expiry=expiry,
+    )
+    src = f"https://{account}.blob.core.windows.net/{container}"
+    if prefix:
+        src = f"{src}/{prefix}"
+    src = f"{src}?{sas}"
+
+    os.makedirs(raw_dir, exist_ok=True)
+    cmd = [
+        "azcopy",
+        "copy",
+        src,
+        raw_dir,
+        "--recursive=true",
+        "--overwrite=false",
+        "--include-pattern=*.parquet",
+        "--output-level=essential",
+    ]
+    print(f"Starting azcopy bulk download to {raw_dir} ...")
+    try:
+        subprocess.run(cmd, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"azcopy failed ({e}); falling back to python download.")
+        return False
+
+
+def bulk_download_and_transform(
+    *,
+    container_name: str,
+    blobs: list[str],
+    blob_prefix: str,
+    data_dir: str,
+    workers: int,
+) -> tuple[int, int, int]:
+    """Bulk transfer via azcopy, then local transform into shard_XXXXX.parquet files."""
+    raw_dir = os.path.join(data_dir, "_azcopy_raw")
+    ok = _run_azcopy_bulk_download(
+        account=ACCOUNT,
+        key=KEY,
+        container=container_name,
+        prefix=blob_prefix,
+        raw_dir=raw_dir,
+    )
+    if not ok:
+        return -1, -1, -1
+
+    done = 0
+    errors = 0
+    total_bytes = 0
+    t0 = time.time()
+
+    def resolve_raw_path(blob_name: str) -> str:
+        rel_name = blob_name
+        if blob_prefix and rel_name.startswith(blob_prefix):
+            rel_name = rel_name[len(blob_prefix):].lstrip("/")
+        path = os.path.join(raw_dir, rel_name)
+        if os.path.exists(path):
+            return path
+        base = os.path.basename(blob_name)
+        alt = os.path.join(raw_dir, base)
+        if os.path.exists(alt):
+            return alt
+        return path
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+        futures = {}
+        for i, blob_name in enumerate(blobs):
+            out_path = os.path.join(data_dir, f"shard_{i:05d}.parquet")
+            if os.path.exists(out_path):
+                done += 1
+                total_bytes += os.path.getsize(out_path)
+                continue
+            in_path = resolve_raw_path(blob_name)
+            futures[executor.submit(transform_local_parquet_to_shard, in_path, out_path)] = (i, in_path)
+
+        for future in as_completed(futures):
+            idx, in_path = futures[future]
+            try:
+                status, nbytes = future.result()
+                if status == "done":
+                    done += 1
+                    total_bytes += nbytes
+                else:
+                    errors += 1
+                    print(f"  [{idx:05d}] {status} ({in_path})")
+            except Exception as e:
+                errors += 1
+                print(f"  [{idx:05d}] error: {e} ({in_path})")
+
+            if done % 50 == 0 and done > 0:
+                elapsed = max(time.time() - t0, 1e-6)
+                rate = done / elapsed
+                print(f"  Transform progress: {done}/{len(blobs)} shards | {rate:.2f} shards/s")
+
+    shutil.rmtree(raw_dir, ignore_errors=True)
+    return done, errors, total_bytes
 
 
 def sort_and_reshard(data_dir: str, sort_keys: list[str], rows_per_shard: int = 14000):
@@ -349,6 +486,20 @@ def main():
         help=f"Output directory (default: {DATA_DIR})"
     )
     parser.add_argument(
+        "--container", type=str, default=CONTAINER,
+        help=f"Azure Blob container name (default: {CONTAINER})"
+    )
+    parser.add_argument(
+        "--blob-prefix", type=str, default="",
+        help="Optional blob path prefix to limit download to a prebuilt subset."
+    )
+    parser.add_argument(
+        "--download-mode",
+        choices=["python", "bulk"],
+        default="python",
+        help="Download mode: 'python' (Azure SDK per-blob) or 'bulk' (azcopy + local transform).",
+    )
+    parser.add_argument(
         "--sort-keys", type=str, nargs="+",
         default=[
             "pedagogical_structure_average",
@@ -383,14 +534,18 @@ def main():
     os.makedirs(args.data_dir, exist_ok=True)
 
     # Connect to Azure
-    print(f"Connecting to Azure: {ACCOUNT}/{CONTAINER}")
-    container_client = get_container_client()
+    print(f"Connecting to Azure: {ACCOUNT}/{args.container}")
+    container_client = get_container_client(args.container)
 
     # List all blobs
     print("Listing blobs (this may take a moment)...")
-    blobs = list_blobs(container_client)
+    prefix = args.blob_prefix if args.blob_prefix else None
+    blobs = list_blobs(container_client, prefix=prefix)
     total = len(blobs)
-    print(f"Found {total} parquet files in container")
+    if prefix:
+        print(f"Found {total} parquet files in container with prefix '{prefix}'")
+    else:
+        print(f"Found {total} parquet files in container")
 
     if total == 0:
         print("ERROR: No parquet files found. Check credentials and container name.")
@@ -419,41 +574,57 @@ def main():
         total_bytes = existing_bytes
         t0 = time.time()
 
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {}
-            for i, blob_name in enumerate(blobs):
-                out_path = os.path.join(args.data_dir, f"shard_{i:05d}.parquet")
-                if os.path.exists(out_path):
-                    continue
-                future = executor.submit(
-                    download_shard, container_client, blob_name, i, args.data_dir
-                )
-                futures[future] = (i, blob_name)
+        used_bulk = False
+        if args.download_mode == "bulk":
+            bulk_done, bulk_errors, bulk_bytes = bulk_download_and_transform(
+                container_name=args.container,
+                blobs=blobs,
+                blob_prefix=(args.blob_prefix or ""),
+                data_dir=args.data_dir,
+                workers=args.workers,
+            )
+            if bulk_done >= 0:
+                done = bulk_done
+                errors = bulk_errors
+                total_bytes = bulk_bytes
+                used_bulk = True
 
-            for future in as_completed(futures):
-                idx, status, nbytes = future.result()
-
-                if status == "done":
-                    done += 1
-                    total_bytes += nbytes
-                elif status.startswith("error") or status.startswith("warning"):
-                    errors += 1
-                    print(f"  [{idx:05d}] {status}")
-                else:
-                    done += 1
-
-                elapsed = time.time() - t0
-                new_done = done - existing
-                rate = new_done / elapsed if elapsed > 0 else 0
-                remaining = (total - done) / rate if rate > 0 else float("inf")
-
-                if new_done % 25 == 0 and new_done > 0:
-                    print(
-                        f"  Progress: {done}/{total} shards | "
-                        f"{total_bytes / 1e9:.1f} GB | "
-                        f"{rate:.1f} shards/s | "
-                        f"ETA: {remaining / 60:.0f} min"
+        if not used_bulk:
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {}
+                for i, blob_name in enumerate(blobs):
+                    out_path = os.path.join(args.data_dir, f"shard_{i:05d}.parquet")
+                    if os.path.exists(out_path):
+                        continue
+                    future = executor.submit(
+                        download_shard, container_client, blob_name, i, args.data_dir
                     )
+                    futures[future] = (i, blob_name)
+
+                for future in as_completed(futures):
+                    idx, status, nbytes = future.result()
+
+                    if status == "done":
+                        done += 1
+                        total_bytes += nbytes
+                    elif status.startswith("error") or status.startswith("warning"):
+                        errors += 1
+                        print(f"  [{idx:05d}] {status}")
+                    else:
+                        done += 1
+
+                    elapsed = time.time() - t0
+                    new_done = done - existing
+                    rate = new_done / elapsed if elapsed > 0 else 0
+                    remaining = (total - done) / rate if rate > 0 else float("inf")
+
+                    if new_done % 25 == 0 and new_done > 0:
+                        print(
+                            f"  Progress: {done}/{total} shards | "
+                            f"{total_bytes / 1e9:.1f} GB | "
+                            f"{rate:.1f} shards/s | "
+                            f"ETA: {remaining / 60:.0f} min"
+                        )
 
         elapsed = time.time() - t0
         print(f"\nDownload complete: {done}/{total} shards in {elapsed / 60:.1f} min")

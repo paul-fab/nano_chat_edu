@@ -13,6 +13,7 @@ DATA_DIR="$HOME/.cache/nanochat/base_data"
 echo "=== [1/6] System dependencies ==="
 apt-get update
 apt-get install -y git build-essential curl wget
+apt-get install -y azcopy || true
 
 echo "=== [2/6] Installing uv (Python package manager) ==="
 if ! command -v uv &> /dev/null; then
@@ -38,7 +39,7 @@ source .venv/bin/activate
 uv pip install -e .
 
 # Install our additional dependencies for Azure download pipeline
-uv pip install azure-storage-blob python-dotenv pyarrow
+uv pip install azure-storage-blob python-dotenv pyarrow duckdb datasets
 
 echo "=== [5/6] Creating data directory ==="
 mkdir -p "$DATA_DIR"
@@ -50,6 +51,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$SCRIPT_DIR/download_azure_data.py" "$NANOCHAT_DIR/"
 cp "$SCRIPT_DIR/patch_nanochat.py" "$NANOCHAT_DIR/"
 cp "$SCRIPT_DIR/train.sh" "$NANOCHAT_DIR/"
+cp "$SCRIPT_DIR/calc_subset_iterations.py" "$NANOCHAT_DIR/"
+cp "$SCRIPT_DIR/run_experiment_arm.sh" "$NANOCHAT_DIR/"
+cp "$SCRIPT_DIR/prepare_hf_random_subset.py" "$NANOCHAT_DIR/"
+cp "$SCRIPT_DIR/run_experiment_hf_random_arm.sh" "$NANOCHAT_DIR/"
+cp "$SCRIPT_DIR/launch_parallel_8gpu_experiments.ps1" "$NANOCHAT_DIR/" 2>/dev/null || true
 
 # Copy .env if it exists alongside this script
 if [ -f "$SCRIPT_DIR/.env" ]; then

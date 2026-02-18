@@ -14,6 +14,10 @@ set -euo pipefail
 DEPTH="${1:-20}"
 RUN_NAME="${2:-edu-d${DEPTH}}"
 NANOCHAT_DIR="${NANOCHAT_DIR:-$HOME/nanochat}"
+TRAIN_EXTRA_ARGS="${TRAIN_EXTRA_ARGS:-}"
+NUM_GPUS="${NUM_GPUS:-1}"
+MASTER_PORT="${MASTER_PORT:-29500}"
+DEVICE_BATCH_SIZE="${DEVICE_BATCH_SIZE:-32}"
 
 cd "$NANOCHAT_DIR"
 source .venv/bin/activate
@@ -49,20 +53,39 @@ echo "=== Starting pretraining ==="
 PARAM_EST=$(python -c "d=$DEPTH; print(f'{d * 64 * d * 4 * 12 / 1e6:.0f}M params approx')")
 echo "  Model: d${DEPTH} (~${PARAM_EST})"
 echo "  Run name: $RUN_NAME"
-echo "  Device batch size: 32"
-echo "  Using chinchilla-optimal token count (10.5x params)"
+echo "  Device batch size: $DEVICE_BATCH_SIZE"
+echo "  Num GPUs: $NUM_GPUS"
+if [[ "$TRAIN_EXTRA_ARGS" == *"--target-param-data-ratio -1"* ]]; then
+    echo "  Using fixed training horizon from provided --num-iterations"
+else
+    echo "  Using Chinchilla-optimal token count (10.5x params)"
+fi
 echo ""
 
-# Single GPU -- no torchrun needed
-python -m scripts.base_train \
-    --run "$RUN_NAME" \
-    --depth "$DEPTH" \
-    --device-batch-size 32 \
-    --max-seq-len 2048 \
-    --eval-every 250 \
-    --core-metric-every 1000 \
-    --save-every 1000 \
-    --sample-every 1000
+if [ "$NUM_GPUS" -gt 1 ]; then
+    # Single-node multi-GPU launch.
+    torchrun --standalone --nproc_per_node "$NUM_GPUS" --master_port "$MASTER_PORT" -m scripts.base_train \
+        --run "$RUN_NAME" \
+        --depth "$DEPTH" \
+        --device-batch-size "$DEVICE_BATCH_SIZE" \
+        --max-seq-len 2048 \
+        --eval-every 250 \
+        --core-metric-every 1000 \
+        --save-every 1000 \
+        --sample-every 1000 \
+        $TRAIN_EXTRA_ARGS
+else
+    python -m scripts.base_train \
+        --run "$RUN_NAME" \
+        --depth "$DEPTH" \
+        --device-batch-size "$DEVICE_BATCH_SIZE" \
+        --max-seq-len 2048 \
+        --eval-every 250 \
+        --core-metric-every 1000 \
+        --save-every 1000 \
+        --sample-every 1000 \
+        $TRAIN_EXTRA_ARGS
+fi
 
 echo ""
 echo "=== Training complete ==="
