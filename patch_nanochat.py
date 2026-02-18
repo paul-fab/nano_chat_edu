@@ -33,7 +33,7 @@ def find_nanochat_dir() -> Path:
     return None
 
 
-def count_shards(data_dir: str = None) -> int:
+def count_shards(data_dir: str | None = None) -> int:
     """Count existing parquet shards in the data directory."""
     if data_dir is None:
         data_dir = os.path.expanduser("~/.cache/nanochat/base_data")
@@ -155,6 +155,59 @@ def patch_common_tf32(nanochat_dir: Path) -> bool:
     return True
 
 
+def patch_dataloader_ddp_sharding(nanochat_dir: Path) -> bool:
+    """Patch dataloader sharding so DDP works with 1-row-group parquet files."""
+    dataloader_path = nanochat_dir / "nanochat" / "dataloader.py"
+
+    if not dataloader_path.exists():
+        print(f"ERROR: {dataloader_path} not found")
+        return False
+
+    content = dataloader_path.read_text(encoding="utf-8")
+    original = content
+
+    old = """            else:
+                rg_idx = ddp_rank
+            while rg_idx < pf.num_row_groups:
+                rg = pf.read_row_group(rg_idx)
+                batch = rg.column('text').to_pylist()
+                for i in range(0, len(batch), tokenizer_batch_size):
+                    yield batch[i:i+tokenizer_batch_size], (pq_idx, rg_idx, epoch)
+                rg_idx += ddp_world_size
+            pq_idx += 1"""
+    new = """            else:
+                # If row groups are fewer than world size (common with 1-row-group shards),
+                # shard by file index so every rank still receives data.
+                if pf.num_row_groups < ddp_world_size:
+                    if (pq_idx % ddp_world_size) != ddp_rank:
+                        pq_idx += 1
+                        continue
+                    rg_idx = 0
+                    rg_step = 1
+                else:
+                    rg_idx = ddp_rank
+                    rg_step = ddp_world_size
+            while rg_idx < pf.num_row_groups:
+                rg = pf.read_row_group(rg_idx)
+                batch = rg.column('text').to_pylist()
+                for i in range(0, len(batch), tokenizer_batch_size):
+                    yield batch[i:i+tokenizer_batch_size], (pq_idx, rg_idx, epoch)
+                rg_idx += rg_step
+            pq_idx += 1"""
+
+    if old in content:
+        content = content.replace(old, new, 1)
+
+    if content == original:
+        print("No dataloader sharding changes needed -- already patched or unexpected format.")
+        return True
+
+    dataloader_path.write_text(content, encoding="utf-8")
+    print(f"Patched {dataloader_path}:")
+    print("  - Added file-level DDP sharding fallback for low row-group parquet files")
+    return True
+
+
 def verify_patch(nanochat_dir: Path) -> bool:
     """Verify the patch was applied correctly."""
     dataset_path = nanochat_dir / "nanochat" / "dataset.py"
@@ -196,6 +249,10 @@ def main():
         "--shard-count", type=int, default=None,
         help="Override shard count (auto-detected from data dir if not specified)"
     )
+    parser.add_argument(
+        "--data-dir", type=str, default=None,
+        help="Directory containing shard_*.parquet files (default: ~/.cache/nanochat/base_data)"
+    )
     args = parser.parse_args()
 
     # Find nanochat
@@ -215,9 +272,10 @@ def main():
     if args.shard_count:
         shard_count = args.shard_count
     else:
-        shard_count = count_shards()
+        shard_count = count_shards(args.data_dir)
         if shard_count <= 0:
-            print("WARNING: No shards found in ~/.cache/nanochat/base_data/")
+            default_dir = args.data_dir or "~/.cache/nanochat/base_data"
+            print(f"WARNING: No shards found in {default_dir}")
             print("Using --shard-count 3250 (known dataset size).")
             print("Alternatively, run download_azure_data.py first.")
             shard_count = 3250
@@ -228,6 +286,8 @@ def main():
     if not patch_dataset(nanochat_dir, shard_count):
         sys.exit(1)
     if not patch_common_tf32(nanochat_dir):
+        sys.exit(1)
+    if not patch_dataloader_ddp_sharding(nanochat_dir):
         sys.exit(1)
 
     # Verify

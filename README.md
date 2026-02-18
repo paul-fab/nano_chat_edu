@@ -139,6 +139,10 @@ wandb login --relogin wandb_v1_xxx
 sed -i 's/\r$//' *.sh
 chmod +x *.sh
 ```
+- 8-GPU run appears alive but never prints `step ...` (often dataloader rank desync on low-row-group parquet shards):
+```bash
+python patch_nanochat.py --data-dir ~/.cache/nanochat/base_data
+```
 - To retry quickly without re-downloading:
 ```bash
 bash run_experiment_arm.sh --skip-download ...

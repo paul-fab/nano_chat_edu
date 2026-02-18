@@ -13,7 +13,7 @@ param(
     [int]$TotalBatchSize = 524288,
     [string]$TokenCol = "token_count",
     [int]$TopMasterPort = 29500,
-    [int]$RandomMasterPort = 29500,
+    [int]$RandomMasterPort = 29501,
     [string]$NanochatDir = "~/nanochat",
     [string]$HfDataset = "airtrain-ai/fineweb-edu-fortified",
     [string]$HfConfig = "",
@@ -25,6 +25,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if (($TopHost -eq $RandomHost) -and ($TopMasterPort -eq $RandomMasterPort)) {
+    throw "TopHost and RandomHost are the same, but both runs use master port $TopMasterPort. Use different ports."
+}
 
 function Start-RemoteArm {
     param(

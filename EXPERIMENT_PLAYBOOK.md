@@ -117,3 +117,41 @@ source ~/.bashrc
 ps -ef | grep -E 'torchrun|scripts.base_train' | grep -v grep
 nvidia-smi
 ```
+
+## Feb 18, 2026 Multi-GPU Postmortem (Top16 d26 8x H100)
+Root cause that caused the apparent hang:
+- DDP dataloader sharding assumed `num_row_groups >= world_size`.
+- Our shards commonly have `1` row group per parquet file.
+- Ranks `1..7` got no batches and looped over files forever, while rank `0` advanced into optimizer/distributed ops.
+- Result was distributed desync and eventual NCCL timeout/stall pattern.
+
+Fixes now applied in this repo:
+- `patch_nanochat.py` now patches `nanochat/dataloader.py` with a fallback:
+  - if row groups are sparse, shard by file index (`pq_idx % world_size`) instead of row-group index.
+- `patch_nanochat.py` now accepts `--data-dir` and uses it for shard counting.
+- `run_experiment_arm.sh` and `run_experiment_hf_random_arm.sh` now call:
+```bash
+python patch_nanochat.py --data-dir "$DATA_DIR"
+```
+- Both run scripts ensure `~/.cache/nanochat/base_data` points to `DATA_DIR` (symlink) when custom data dirs are used.
+- `train.sh` now validates visible GPU count before `torchrun`.
+- `train.sh` now parses `TRAIN_EXTRA_ARGS` into a bash array to avoid bad word splitting.
+- `launch_parallel_8gpu_experiments.ps1` now uses `RandomMasterPort=29501` by default and hard-fails on same-host/same-port collisions.
+
+Operational mistakes to avoid on the HF run:
+- Do not copy `.sh` files from Windows without converting line endings.
+```bash
+cd ~/nanochat
+sed -i 's/\r$//' *.sh
+chmod +x *.sh
+```
+- Always re-run patching before launch:
+```bash
+cd ~/nanochat && source .venv/bin/activate
+python patch_nanochat.py --data-dir ~/.cache/nanochat/base_data
+```
+- Confirm real progress after launch (not just process existence):
+```bash
+grep -n "step " ~/train_<run>.log | tail
+nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader
+```

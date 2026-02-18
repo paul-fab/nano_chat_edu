@@ -30,6 +30,25 @@ if [ "$SHARD_COUNT" -eq 0 ]; then
 fi
 echo "Found $SHARD_COUNT data shards"
 
+# Validate requested GPU count before torchrun launch.
+if [ "$NUM_GPUS" -gt 1 ]; then
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        echo "ERROR: NUM_GPUS=$NUM_GPUS requested but nvidia-smi not found."
+        exit 1
+    fi
+    VISIBLE_GPUS=$(nvidia-smi -L 2>/dev/null | wc -l)
+    if [ "$VISIBLE_GPUS" -lt "$NUM_GPUS" ]; then
+        echo "ERROR: NUM_GPUS=$NUM_GPUS requested, but only $VISIBLE_GPUS GPU(s) are visible."
+        exit 1
+    fi
+fi
+
+# Convert TRAIN_EXTRA_ARGS string to an array for safe expansion.
+EXTRA_ARGS=()
+if [[ -n "$TRAIN_EXTRA_ARGS" ]]; then
+    read -r -a EXTRA_ARGS <<< "$TRAIN_EXTRA_ARGS"
+fi
+
 # =============================================================================
 # Step 1: Train tokenizer
 # =============================================================================
@@ -73,7 +92,7 @@ if [ "$NUM_GPUS" -gt 1 ]; then
         --core-metric-every 1000 \
         --save-every 1000 \
         --sample-every 1000 \
-        $TRAIN_EXTRA_ARGS
+        "${EXTRA_ARGS[@]}"
 else
     python -m scripts.base_train \
         --run "$RUN_NAME" \
@@ -84,7 +103,7 @@ else
         --core-metric-every 1000 \
         --save-every 1000 \
         --sample-every 1000 \
-        $TRAIN_EXTRA_ARGS
+        "${EXTRA_ARGS[@]}"
 fi
 
 echo ""

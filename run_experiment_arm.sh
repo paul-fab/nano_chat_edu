@@ -90,7 +90,14 @@ echo "$CALC_JSON"
 
 NUM_ITERATIONS="$(echo "$CALC_JSON" | python -c "import sys,json; s=sys.stdin.read().strip(); d=json.loads(s) if s else {}; print(d.get('num_iterations',''))" 2>/dev/null || true)"
 
-python patch_nanochat.py
+python patch_nanochat.py --data-dir "$DATA_DIR"
+
+# nanochat expects shards in ~/.cache/nanochat/base_data. Keep a symlink when using custom data-dir.
+DEFAULT_DATA_DIR="${HOME}/.cache/nanochat/base_data"
+if [[ "$DATA_DIR" != "$DEFAULT_DATA_DIR" ]]; then
+  mkdir -p "$(dirname "$DEFAULT_DATA_DIR")"
+  ln -sfn "$DATA_DIR" "$DEFAULT_DATA_DIR"
+fi
 
 if [[ -n "$NUM_ITERATIONS" ]]; then
   export TRAIN_EXTRA_ARGS="--target-param-data-ratio -1 --total-batch-size ${TOTAL_BATCH_SIZE} --num-iterations ${NUM_ITERATIONS}"
