@@ -60,6 +60,7 @@ python -m scripts.base_train \
     --device-batch-size 32 \
     --max-seq-len 2048 \
     --eval-every 250 \
+    --core-metric-every 1000 \
     --save-every 1000 \
     --sample-every 1000
 

@@ -15,7 +15,9 @@ Usage:
 Requires .env with AZURE_STORAGE_ACCOUNT and AZURE_STORAGE_KEY.
 """
 
+import math
 import os
+import shutil
 import sys
 import time
 import argparse
@@ -218,6 +220,118 @@ def sort_and_reshard(data_dir: str, sort_keys: list[str], rows_per_shard: int = 
     return True
 
 
+def sort_top_percent_external(
+    data_dir: str,
+    sort_keys: list[str],
+    top_percent: float,
+    rows_per_shard: int = 14000,
+    memory_limit: str = "4GB",
+):
+    """Memory-safe top-percent selection using DuckDB external sorting.
+
+    Produces shards with only:
+      - score (composite average across sort_keys)
+      - text
+    """
+    print(f"\n=== Selecting top {top_percent:.2f}% by composite score ===")
+
+    shard_files = sorted(
+        [
+            os.path.join(data_dir, f)
+            for f in os.listdir(data_dir)
+            if f.endswith(".parquet") and not f.endswith(".tmp")
+        ]
+    )
+    if not shard_files:
+        print("ERROR: No parquet shards found.")
+        return False
+
+    # Verify required columns exist before running a long query.
+    schema = pq.read_schema(shard_files[0])
+    missing = [k for k in (["text"] + sort_keys) if k not in schema.names]
+    if missing:
+        print(f"ERROR: Missing required columns in shard schema: {missing}")
+        print(f"Available columns: {schema.names}")
+        return False
+
+    try:
+        import duckdb
+    except ImportError:
+        print("ERROR: 'duckdb' is required for --top-percent mode.")
+        print("Install with: pip install duckdb")
+        return False
+
+    temp_dir = os.path.join(data_dir, "_duckdb_tmp")
+    out_tmp_dir = os.path.join(data_dir, "_top_shards_tmp")
+    os.makedirs(temp_dir, exist_ok=True)
+    if os.path.isdir(out_tmp_dir):
+        shutil.rmtree(out_tmp_dir)
+    os.makedirs(out_tmp_dir, exist_ok=True)
+
+    quoted_files = ", ".join(f"'{p.replace(chr(39), chr(39) + chr(39))}'" for p in shard_files)
+    key_exprs = [f"coalesce(CAST({k} AS DOUBLE), 0.0)" for k in sort_keys]
+    composite_expr = f"({' + '.join(key_exprs)}) / {len(sort_keys)}"
+
+    conn = duckdb.connect()
+    conn.execute(f"PRAGMA temp_directory='{temp_dir.replace(chr(39), chr(39) + chr(39))}'")
+    conn.execute(f"PRAGMA memory_limit='{memory_limit}'")
+    conn.execute("PRAGMA threads=4")
+
+    base_query = (
+        f"SELECT text, {composite_expr} AS score "
+        f"FROM parquet_scan([{quoted_files}], union_by_name=true)"
+    )
+
+    total_rows = conn.execute(f"SELECT COUNT(*) FROM ({base_query}) AS t").fetchone()[0]
+    if total_rows == 0:
+        print("ERROR: No rows found after scan.")
+        return False
+
+    k = max(1, math.ceil(total_rows * (top_percent / 100.0)))
+    print(f"Total rows: {total_rows:,}")
+    print(f"Rows kept: {k:,}")
+
+    stream_query = (
+        f"SELECT score, text FROM ({base_query}) AS t "
+        f"ORDER BY score DESC "
+        f"LIMIT {k}"
+    )
+
+    reader = conn.execute(stream_query).fetch_record_batch(rows_per_batch=rows_per_shard)
+
+    shard_idx = 0
+    rows_written = 0
+    for batch in reader:
+        table = pa.Table.from_batches([batch])
+        out_path = os.path.join(out_tmp_dir, f"shard_{shard_idx:05d}.parquet")
+        pq.write_table(table, out_path, compression="zstd")
+        rows_written += table.num_rows
+        shard_idx += 1
+        if shard_idx % 250 == 0:
+            print(f"  Wrote {shard_idx} shards ({rows_written:,} rows)")
+
+    conn.close()
+
+    # Replace old shard files atomically-ish: only after successful write.
+    for f in shard_files:
+        os.remove(f)
+
+    new_shards = sorted(
+        [
+            f
+            for f in os.listdir(out_tmp_dir)
+            if f.endswith(".parquet") and not f.endswith(".tmp")
+        ]
+    )
+    for f in new_shards:
+        shutil.move(os.path.join(out_tmp_dir, f), os.path.join(data_dir, f))
+    shutil.rmtree(out_tmp_dir, ignore_errors=True)
+
+    print(f"Done! Wrote {len(new_shards)} shards with columns: ['score', 'text']")
+    print(f"Total rows written: {rows_written:,}")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Download Azure education data for nanochat training"
@@ -247,7 +361,24 @@ def main():
         "--skip-sort", action="store_true",
         help="Skip the sorting step (download only)"
     )
+    parser.add_argument(
+        "--top-percent", type=float, default=100.0,
+        help="Keep only the top X%% rows by composite score (memory-safe external sort). "
+             "Default: 100 (keep all rows)"
+    )
+    parser.add_argument(
+        "--rows-per-shard", type=int, default=14000,
+        help="Rows per output shard after sorting (default: 14000)"
+    )
+    parser.add_argument(
+        "--duckdb-memory-limit", type=str, default="4GB",
+        help="DuckDB memory limit for --top-percent mode (default: 4GB)"
+    )
     args = parser.parse_args()
+
+    if args.top_percent <= 0 or args.top_percent > 100:
+        print("ERROR: --top-percent must be in the range (0, 100].")
+        sys.exit(1)
 
     os.makedirs(args.data_dir, exist_ok=True)
 
@@ -333,7 +464,16 @@ def main():
 
     # Sort by quality
     if not args.skip_sort:
-        sort_and_reshard(args.data_dir, args.sort_keys)
+        if args.top_percent < 100.0:
+            sort_top_percent_external(
+                args.data_dir,
+                args.sort_keys,
+                top_percent=args.top_percent,
+                rows_per_shard=args.rows_per_shard,
+                memory_limit=args.duckdb_memory_limit,
+            )
+        else:
+            sort_and_reshard(args.data_dir, args.sort_keys, rows_per_shard=args.rows_per_shard)
     else:
         print("\nSkipping sort step (--skip-sort). Shards retain metadata.")
 

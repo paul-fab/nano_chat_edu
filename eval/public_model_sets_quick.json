@@ -1,0 +1,12 @@
+{
+  "quick_smoke": [
+    {
+      "name": "gpt2_124m",
+      "model": "gpt2"
+    },
+    {
+      "name": "smollm2_135m",
+      "model": "HuggingFaceTB/SmolLM2-135M"
+    }
+  ]
+}
