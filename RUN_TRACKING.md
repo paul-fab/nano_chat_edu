@@ -16,7 +16,7 @@ This sheet tracks the main experiment lines:
 | Run label | W&B run name | W&B run ID(s) | Host | GPU setup | Data variant | Start (UTC) | W&B URL |
 |---|---|---|---|---|---|---|---|
 | top50 | `edu-d26-top50` | `zoebqeam` | `192.222.50.180` | 1x NVIDIA GH200 480GB | Full filtered + extra top-50% quality layer | 2026-02-17 20:46:50.105547 | https://wandb.ai/fabdata/nanochat/runs/zoebqeam |
-| top20 | `edu-d26-top20` | `pb0ezqrx` | `192.222.58.132` | 1x NVIDIA GH200 480GB | Full filtered + extra top-20% quality layer | 2026-02-17 16:09:01.016072 | https://wandb.ai/fabdata/nanochat/runs/pb0ezqrx |
+| top20 | `edu-d26-top20` | `pb0ezqrx` | `192.222.58.132` | 1x NVIDIA GH200 480GB | Full filtered + extra top-20% quality layer | 2026-02-19 06:08:07.428378 | https://wandb.ai/fabdata/nanochat/runs/pb0ezqrx + https://wandb.ai/fabdata/nanochat/runs/g9vugh79 |
 | full-filtered (split) | `exp-top16-d26-8gpu` | `dbwtodle` + `n9hithr0` + `bk8zeag4` | `192.222.53.38` | 8x NVIDIA H100 80GB HBM3 | Full filtered (no extra top20/top50 layer) | 2026-02-18 13:20:09.311701 + 2026-02-18 14:26:27.369938 + 2026-02-19 05:39:29.079169 | https://wandb.ai/fabdata/nanochat/runs/dbwtodle + https://wandb.ai/fabdata/nanochat/runs/n9hithr0 + https://wandb.ai/fabdata/nanochat/runs/bk8zeag4 |
 | random-8gpu (split) | `exp-rand16-d26-8gpu` | `aw30lam9` + `4ul335c6` | `192.222.53.38` | 8x NVIDIA H100 80GB HBM3 | Random/staging subset | 2026-02-18 20:00:05.557483 + 2026-02-18 21:05:28.394977 | https://wandb.ai/fabdata/nanochat/runs/aw30lam9 + https://wandb.ai/fabdata/nanochat/runs/4ul335c6 |
 
@@ -35,9 +35,9 @@ This sheet tracks the main experiment lines:
 
 | Run label | Latest training step seen | Best validation bpb seen | Best CORE seen | Best CDPK seen | Notes |
 |---|---:|---:|---:|---:|---|
-| top50 (`zoebqeam`) | 8593 | 0.633631 (step 8500) | 0.2154 (step 8000) | 0.2892 (260/899, step 2000) | CDPK/CORE every 1000 steps |
-| top20 (`pb0ezqrx`) | 9195 | 0.581783 (step 9196) | 0.2400 (step 9196) | 0.2881 (259/899, step 5000) | CDPK/CORE every 1000 steps |
-| full-filtered split (`dbwtodle` + `n9hithr0` + `bk8zeag4`) | 12359 (latest phase) | 0.626348 (step 12250) | 0.2221 (step 10000) | 0.2948 (265/899, step 11000) | Phase A reached step 2347; phase B resumed at 2000; phase C resumed at 12000 |
+| top50 (`zoebqeam`) | 9195 | 0.628162 (step 9196) | 0.2249 (step 9000) | 0.2892 (260/899, step 2000) | CDPK/CORE every 1000 steps |
+| top20 (`pb0ezqrx`) | 10718 | 0.581783 (step 9196) | 0.2400 (step 9196) | 0.2881 (259/899, step 5000) | CDPK/CORE every 1000 steps |
+| full-filtered split (`dbwtodle` + `n9hithr0` + `bk8zeag4`) | 33185 (latest phase) | 0.590568 (step 32750) | 0.2422 (step 31000) | 0.3026 (272/899, step 21000) | Phase A reached step 2347; phase B resumed at 2000; phase C resumed at 12000 |
 | random-8gpu split (`aw30lam9` + `4ul335c6`) | 19391 | 0.788619 (step 19250) | 0.2636 (step 19000) | 0.2948 (265/899, step 13000) | Phase A reached step 1740, then resumed from checkpoint 1000 in phase B |
 
 ## Milestone Table (fill as runs progress)
@@ -80,6 +80,9 @@ Use this for side-by-side comparisons at common checkpoints.
 | top50 | 8000 | 0.639461 | 0.2154 | 0.2803 | |
 | top50 | 8250 | 0.636351 | n/a | n/a | |
 | top50 | 8500 | 0.633631 | n/a | n/a | |
+| top50 | 8750 | 0.630936 | n/a | n/a | |
+| top50 | 9000 | 0.629051 | 0.2249 | 0.2836 | |
+| top50 | 9196 | 0.628162 | 0.2239 | 0.2803 | |
 | top20 | 250 | 0.915232 | n/a | n/a | |
 | top20 | 500 | 0.811242 | n/a | n/a | |
 | top20 | 750 | 0.776285 | n/a | n/a | |
@@ -117,6 +120,12 @@ Use this for side-by-side comparisons at common checkpoints.
 | top20 | 8750 | 0.585529 | n/a | n/a | |
 | top20 | 9000 | 0.582885 | 0.2395 | 0.2714 | |
 | top20 | 9196 | 0.581783 | 0.2400 | 0.2759 | |
+| top20 | 9250 | 0.611778 | n/a | n/a | |
+| top20 | 9500 | 0.618771 | 0.2130 | n/a | |
+| top20 | 9750 | 0.619696 | n/a | n/a | |
+| top20 | 10000 | 0.619237 | 0.2083 | 0.2814 | |
+| top20 | 10250 | 0.620513 | n/a | n/a | |
+| top20 | 10500 | 0.614135 | 0.2230 | n/a | |
 | full-filtered (split) | 250 | 0.898655 | n/a | n/a | phase A |
 | full-filtered (split) | 500 | 0.782442 | n/a | n/a | phase A |
 | full-filtered (split) | 750 | 0.745609 | n/a | n/a | phase A |
@@ -166,6 +175,89 @@ Use this for side-by-side comparisons at common checkpoints.
 | full-filtered (split) | 11750 | 0.627681 | n/a | n/a | phase B |
 | full-filtered (split) | 12000 | 0.626479 | 0.2180 | 0.2859 | phase B |
 | full-filtered (split) | 12250 | 0.626348 | n/a | n/a | phase C |
+| full-filtered (split) | 12500 | 0.625040 | n/a | n/a | phase C |
+| full-filtered (split) | 12750 | 0.623890 | n/a | n/a | phase C |
+| full-filtered (split) | 13000 | 0.623610 | 0.2251 | 0.2770 | phase C |
+| full-filtered (split) | 13250 | 0.622867 | n/a | n/a | phase C |
+| full-filtered (split) | 13500 | 0.620768 | n/a | n/a | phase C |
+| full-filtered (split) | 13750 | 0.621403 | n/a | n/a | phase C |
+| full-filtered (split) | 14000 | 0.620294 | 0.2279 | 0.2759 | phase C |
+| full-filtered (split) | 14250 | 0.620655 | n/a | n/a | phase C |
+| full-filtered (split) | 14500 | 0.619446 | n/a | n/a | phase C |
+| full-filtered (split) | 14750 | 0.619406 | n/a | n/a | phase C |
+| full-filtered (split) | 15000 | 0.618883 | 0.2176 | 0.2892 | phase C |
+| full-filtered (split) | 15250 | 0.618359 | n/a | n/a | phase C |
+| full-filtered (split) | 15500 | 0.618210 | n/a | n/a | phase C |
+| full-filtered (split) | 15750 | 0.616963 | n/a | n/a | phase C |
+| full-filtered (split) | 16000 | 0.616538 | 0.2177 | 0.2836 | phase C |
+| full-filtered (split) | 16250 | 0.616019 | n/a | n/a | phase C |
+| full-filtered (split) | 16500 | 0.615144 | n/a | n/a | phase C |
+| full-filtered (split) | 16750 | 0.613856 | n/a | n/a | phase C |
+| full-filtered (split) | 17000 | 0.613831 | 0.2370 | 0.2925 | phase C |
+| full-filtered (split) | 17250 | 0.613073 | n/a | n/a | phase C |
+| full-filtered (split) | 17500 | 0.612470 | n/a | n/a | phase C |
+| full-filtered (split) | 17750 | 0.613355 | n/a | n/a | phase C |
+| full-filtered (split) | 18000 | 0.612875 | 0.2376 | 0.2859 | phase C |
+| full-filtered (split) | 18250 | 0.612049 | n/a | n/a | phase C |
+| full-filtered (split) | 18500 | 0.611134 | n/a | n/a | phase C |
+| full-filtered (split) | 18750 | 0.610403 | n/a | n/a | phase C |
+| full-filtered (split) | 19000 | 0.610755 | 0.2235 | 0.2925 | phase C |
+| full-filtered (split) | 19250 | 0.610232 | n/a | n/a | phase C |
+| full-filtered (split) | 19500 | 0.609931 | n/a | n/a | phase C |
+| full-filtered (split) | 19750 | 0.609232 | n/a | n/a | phase C |
+| full-filtered (split) | 20000 | 0.609499 | 0.2308 | 0.2870 | phase C |
+| full-filtered (split) | 20250 | 0.608834 | n/a | n/a | phase C |
+| full-filtered (split) | 20500 | 0.609227 | n/a | n/a | phase C |
+| full-filtered (split) | 20750 | 0.608009 | n/a | n/a | phase C |
+| full-filtered (split) | 21000 | 0.607296 | 0.2277 | 0.3026 | phase C |
+| full-filtered (split) | 21250 | 0.607801 | n/a | n/a | phase C |
+| full-filtered (split) | 21500 | 0.607476 | n/a | n/a | phase C |
+| full-filtered (split) | 21750 | 0.606911 | n/a | n/a | phase C |
+| full-filtered (split) | 22000 | 0.605940 | 0.2284 | 0.2914 | phase C |
+| full-filtered (split) | 22250 | 0.605722 | n/a | n/a | phase C |
+| full-filtered (split) | 22500 | 0.605960 | n/a | n/a | phase C |
+| full-filtered (split) | 22750 | 0.604820 | n/a | n/a | phase C |
+| full-filtered (split) | 23000 | 0.604006 | 0.2200 | 0.2770 | phase C |
+| full-filtered (split) | 23250 | 0.604425 | n/a | n/a | phase C |
+| full-filtered (split) | 23500 | 0.603863 | n/a | n/a | phase C |
+| full-filtered (split) | 23750 | 0.603537 | n/a | n/a | phase C |
+| full-filtered (split) | 24000 | 0.602449 | 0.2290 | 0.2803 | phase C |
+| full-filtered (split) | 24250 | 0.603169 | n/a | n/a | phase C |
+| full-filtered (split) | 24500 | 0.602364 | n/a | n/a | phase C |
+| full-filtered (split) | 24750 | 0.602447 | n/a | n/a | phase C |
+| full-filtered (split) | 25000 | 0.601352 | 0.2394 | 0.2836 | phase C |
+| full-filtered (split) | 25250 | 0.600374 | n/a | n/a | phase C |
+| full-filtered (split) | 25500 | 0.601074 | n/a | n/a | phase C |
+| full-filtered (split) | 25750 | 0.601597 | n/a | n/a | phase C |
+| full-filtered (split) | 26000 | 0.601095 | 0.2340 | 0.2747 | phase C |
+| full-filtered (split) | 26250 | 0.600415 | n/a | n/a | phase C |
+| full-filtered (split) | 26500 | 0.600274 | n/a | n/a | phase C |
+| full-filtered (split) | 26750 | 0.600219 | n/a | n/a | phase C |
+| full-filtered (split) | 27000 | 0.600299 | 0.2416 | 0.2881 | phase C |
+| full-filtered (split) | 27250 | 0.598948 | n/a | n/a | phase C |
+| full-filtered (split) | 27500 | 0.598441 | n/a | n/a | phase C |
+| full-filtered (split) | 27750 | 0.598316 | n/a | n/a | phase C |
+| full-filtered (split) | 28000 | 0.597373 | 0.2390 | 0.2736 | phase C |
+| full-filtered (split) | 28250 | 0.597765 | n/a | n/a | phase C |
+| full-filtered (split) | 28500 | 0.597172 | n/a | n/a | phase C |
+| full-filtered (split) | 28750 | 0.596537 | n/a | n/a | phase C |
+| full-filtered (split) | 29000 | 0.597409 | 0.2389 | 0.2759 | phase C |
+| full-filtered (split) | 29250 | 0.597457 | n/a | n/a | phase C |
+| full-filtered (split) | 29500 | 0.596894 | n/a | n/a | phase C |
+| full-filtered (split) | 29750 | 0.595242 | n/a | n/a | phase C |
+| full-filtered (split) | 30000 | 0.594936 | 0.2359 | 0.2925 | phase C |
+| full-filtered (split) | 30250 | 0.594943 | n/a | n/a | phase C |
+| full-filtered (split) | 30500 | 0.594423 | n/a | n/a | phase C |
+| full-filtered (split) | 30750 | 0.593710 | n/a | n/a | phase C |
+| full-filtered (split) | 31000 | 0.594326 | 0.2422 | 0.2825 | phase C |
+| full-filtered (split) | 31250 | 0.592849 | n/a | n/a | phase C |
+| full-filtered (split) | 31500 | 0.593920 | n/a | n/a | phase C |
+| full-filtered (split) | 31750 | 0.592228 | n/a | n/a | phase C |
+| full-filtered (split) | 32000 | 0.592190 | 0.2383 | 0.2870 | phase C |
+| full-filtered (split) | 32250 | 0.592623 | n/a | n/a | phase C |
+| full-filtered (split) | 32500 | 0.591380 | n/a | n/a | phase C |
+| full-filtered (split) | 32750 | 0.590568 | n/a | n/a | phase C |
+| full-filtered (split) | 33000 | 0.590626 | 0.2348 | 0.2825 | phase C |
 | random-8gpu (split) | 250 | 1.151184 | n/a | n/a | phase A |
 | random-8gpu (split) | 500 | 1.035174 | n/a | n/a | phase A |
 | random-8gpu (split) | 750 | 0.991594 | n/a | n/a | phase A |

@@ -35,9 +35,12 @@ RUN_SPECS: List[RunSpec] = [
     RunSpec(
         label="top20",
         wandb_name="edu-d26-top20",
-        run_ids=["pb0ezqrx"],
+        run_ids=["pb0ezqrx", "g9vugh79"],
         host="192.222.58.132",
-        run_dirs=["run-20260217_160901-pb0ezqrx"],
+        run_dirs=[
+            "run-20260217_160901-pb0ezqrx",
+            "run-20260219_060807-g9vugh79",
+        ],
         data_variant="Full filtered + extra top-20% quality layer",
     ),
     RunSpec(
@@ -160,7 +163,7 @@ def fmt_int(x: Optional[int]) -> str:
 
 
 def utc_date() -> str:
-    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
 
 
 def build_markdown(rows: List[Dict[str, object]]) -> str:
