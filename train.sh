@@ -18,6 +18,7 @@ TRAIN_EXTRA_ARGS="${TRAIN_EXTRA_ARGS:-}"
 NUM_GPUS="${NUM_GPUS:-1}"
 MASTER_PORT="${MASTER_PORT:-29500}"
 DEVICE_BATCH_SIZE="${DEVICE_BATCH_SIZE:-32}"
+MODEL_TAG="${MODEL_TAG:-}"
 
 cd "$NANOCHAT_DIR"
 source .venv/bin/activate
@@ -74,12 +75,20 @@ echo "  Model: d${DEPTH} (~${PARAM_EST})"
 echo "  Run name: $RUN_NAME"
 echo "  Device batch size: $DEVICE_BATCH_SIZE"
 echo "  Num GPUs: $NUM_GPUS"
+if [[ -n "$MODEL_TAG" ]]; then
+    echo "  Model tag: $MODEL_TAG"
+fi
 if [[ "$TRAIN_EXTRA_ARGS" == *"--target-param-data-ratio -1"* ]]; then
     echo "  Using fixed training horizon from provided --num-iterations"
 else
     echo "  Using Chinchilla-optimal token count (10.5x params)"
 fi
 echo ""
+
+MODEL_TAG_ARGS=()
+if [[ -n "$MODEL_TAG" ]]; then
+    MODEL_TAG_ARGS=(--model-tag "$MODEL_TAG")
+fi
 
 if [ "$NUM_GPUS" -gt 1 ]; then
     # Single-node multi-GPU launch.
@@ -92,6 +101,7 @@ if [ "$NUM_GPUS" -gt 1 ]; then
         --core-metric-every 1000 \
         --save-every 1000 \
         --sample-every 1000 \
+        "${MODEL_TAG_ARGS[@]}" \
         "${EXTRA_ARGS[@]}"
 else
     python -m scripts.base_train \
@@ -103,6 +113,7 @@ else
         --core-metric-every 1000 \
         --save-every 1000 \
         --sample-every 1000 \
+        "${MODEL_TAG_ARGS[@]}" \
         "${EXTRA_ARGS[@]}"
 fi
 

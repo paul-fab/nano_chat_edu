@@ -176,9 +176,14 @@ def patch_dataloader_ddp_sharding(nanochat_dir: Path) -> bool:
                 rg_idx += ddp_world_size
             pq_idx += 1"""
     new = """            else:
+                # Validation uses a single held-out file. Replicate across ranks so
+                # all ranks execute eval collectives in lock-step.
+                if split == "val":
+                    rg_idx = 0
+                    rg_step = 1
                 # If row groups are fewer than world size (common with 1-row-group shards),
-                # shard by file index so every rank still receives data.
-                if pf.num_row_groups < ddp_world_size:
+                # shard by file index so every rank still receives train data.
+                elif pf.num_row_groups < ddp_world_size:
                     if (pq_idx % ddp_world_size) != ddp_rank:
                         pq_idx += 1
                         continue

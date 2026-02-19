@@ -17,9 +17,12 @@ TOTAL_BATCH_SIZE="524288"
 TOKEN_COL="token_count"
 NANOCHAT_DIR="${NANOCHAT_DIR:-$HOME/nanochat}"
 NUM_GPUS="8"
-DEVICE_BATCH_SIZE="32"
+DEVICE_BATCH_SIZE="8"
 MASTER_PORT="29500"
 ROWS_PER_SHARD="14000"
+FORCE_LINK_WHILE_TRAINING="0"
+DISABLE_COMPILE="1"
+MODEL_TAG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +41,9 @@ while [[ $# -gt 0 ]]; do
     --device-batch-size) DEVICE_BATCH_SIZE="$2"; shift 2 ;;
     --master-port) MASTER_PORT="$2"; shift 2 ;;
     --rows-per-shard) ROWS_PER_SHARD="$2"; shift 2 ;;
+    --force-link-while-training) FORCE_LINK_WHILE_TRAINING="1"; shift 1 ;;
+    --enable-compile) DISABLE_COMPILE="0"; shift 1 ;;
+    --model-tag) MODEL_TAG="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -49,6 +55,10 @@ fi
 
 cd "$NANOCHAT_DIR"
 source .venv/bin/activate
+
+if [[ -z "$MODEL_TAG" ]]; then
+  MODEL_TAG="$RUN_NAME"
+fi
 
 mkdir -p "$DATA_DIR"
 
@@ -94,7 +104,21 @@ python patch_nanochat.py --data-dir "$DATA_DIR"
 # nanochat expects shards in ~/.cache/nanochat/base_data. Keep a symlink when using custom data-dir.
 DEFAULT_DATA_DIR="${HOME}/.cache/nanochat/base_data"
 if [[ "$DATA_DIR" != "$DEFAULT_DATA_DIR" ]]; then
+  # With set -euo pipefail, grep-based pipelines can exit when no matches are found.
+  # Use pgrep and tolerate zero matches.
+  ACTIVE_TRAINERS=$(pgrep -af 'torchrun|scripts.base_train' | wc -l || true)
+  if [[ "$ACTIVE_TRAINERS" -gt 0 && "$FORCE_LINK_WHILE_TRAINING" != "1" ]]; then
+    echo "ERROR: Found active training process(es) on this host."
+    echo "Refusing to repoint $DEFAULT_DATA_DIR -> $DATA_DIR while training is active."
+    echo "If intentional, rerun with --force-link-while-training."
+    exit 1
+  fi
   mkdir -p "$(dirname "$DEFAULT_DATA_DIR")"
+  if [[ -d "$DEFAULT_DATA_DIR" && ! -L "$DEFAULT_DATA_DIR" ]]; then
+    BACKUP_DIR="${DEFAULT_DATA_DIR}.bak_$(date +%Y%m%d_%H%M%S)"
+    echo "Backing up existing directory $DEFAULT_DATA_DIR -> $BACKUP_DIR"
+    mv "$DEFAULT_DATA_DIR" "$BACKUP_DIR"
+  fi
   ln -sfn "$DATA_DIR" "$DEFAULT_DATA_DIR"
 fi
 
@@ -109,5 +133,14 @@ fi
 export NUM_GPUS="$NUM_GPUS"
 export DEVICE_BATCH_SIZE="$DEVICE_BATCH_SIZE"
 export MASTER_PORT="$MASTER_PORT"
+export MODEL_TAG="$MODEL_TAG"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+if [[ "$DISABLE_COMPILE" == "1" ]]; then
+  export TORCH_COMPILE_DISABLE=1
+fi
+
+echo "Launch config: num_gpus=${NUM_GPUS}, device_batch_size=${DEVICE_BATCH_SIZE}, master_port=${MASTER_PORT}"
+echo "Env: PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}, TORCH_COMPILE_DISABLE=${TORCH_COMPILE_DISABLE:-0}"
+echo "Checkpoint namespace (model_tag): $MODEL_TAG"
 
 bash train.sh "$DEPTH" "$RUN_NAME"

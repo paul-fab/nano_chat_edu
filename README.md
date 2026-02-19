@@ -34,6 +34,7 @@ Training (1x H100/GH200)
 | `run_experiment_arm.sh` | Run one experiment arm from a prebuilt Azure subset prefix |
 | `run_experiment_hf_random_arm.sh` | Run HF random arm (`prepare` or `skip` sharding mode) |
 | `EXPERIMENT_PLAYBOOK.md` | Recommended end-to-end workflow and troubleshooting |
+| `RUN_TRACKING.md` | Tracking sheet for active runs, split runs, and headline metrics |
 
 ## Quick Start
 

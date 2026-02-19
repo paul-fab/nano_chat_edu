@@ -27,6 +27,7 @@ DEVICE_BATCH_SIZE="32"
 MASTER_PORT="29500"
 SKIP_DOWNLOAD="0"
 DOWNLOAD_MODE="bulk"
+MODEL_TAG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --master-port) MASTER_PORT="$2"; shift 2 ;;
     --skip-download) SKIP_DOWNLOAD="1"; shift 1 ;;
     --download-mode) DOWNLOAD_MODE="$2"; shift 2 ;;
+    --model-tag) MODEL_TAG="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -55,6 +57,9 @@ fi
 
 if [[ -z "$RUN_NAME" ]]; then
   RUN_NAME="exp-${ARM}-d${DEPTH}"
+fi
+if [[ -z "$MODEL_TAG" ]]; then
+  MODEL_TAG="$RUN_NAME"
 fi
 
 cd "$NANOCHAT_DIR"
@@ -110,5 +115,8 @@ fi
 export NUM_GPUS="$NUM_GPUS"
 export DEVICE_BATCH_SIZE="$DEVICE_BATCH_SIZE"
 export MASTER_PORT="$MASTER_PORT"
+export MODEL_TAG="$MODEL_TAG"
+
+echo "Checkpoint namespace (model_tag): $MODEL_TAG"
 
 bash train.sh "$DEPTH" "$RUN_NAME"

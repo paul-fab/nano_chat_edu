@@ -72,6 +72,25 @@ bash run_experiment_hf_random_arm.sh \
   --total-batch-size 524288
 ```
 
+If shards are staged under `~/.cache/nanochat/hf_random_data_staging/base_data`, run:
+```bash
+cd ~/nanochat
+source .venv/bin/activate
+bash run_experiment_hf_random_arm.sh \
+  --prepare-mode skip \
+  --data-dir ~/.cache/nanochat/hf_random_data_staging/base_data \
+  --depth 26 \
+  --run-name exp-rand16-d26-8gpu \
+  --num-gpus 8 \
+  --device-batch-size 32 \
+  --total-batch-size 524288 \
+  --master-port 29501
+```
+
+Safety note:
+- `run_experiment_hf_random_arm.sh` now refuses to repoint `~/.cache/nanochat/base_data` while training is active.
+- Override only if intentional with `--force-link-while-training`.
+
 ## Parallel Launcher
 `launch_parallel_8gpu_experiments.ps1` supports:
 - `-HfPrepareMode prepare` (default)
