@@ -13,6 +13,11 @@ Use:
 2. **GPU node A** for top arm training
 3. **GPU node B** for random arm training (from prebuilt shards, `--prepare-mode skip`)
 
+For fair comparisons, keep these equal across arms:
+- `depth`, tokenizer, optimizer/lr schedule, eval cadence
+- `total_batch_size`
+- full-token horizon mode (`--target-param-data-ratio -1`) and equivalent `num_iterations`
+
 ## One-Time Host Setup
 On each machine:
 ```bash
@@ -41,6 +46,15 @@ python prepare_hf_random_subset.py \
 ```
 
 Then transfer prepared `shard_*.parquet` to GPU random node (`~/.cache/nanochat/base_data`).
+
+To transfer shards directly host-to-host with parallel workers:
+```powershell
+powershell -File .\transfer_shards_parallel.ps1 `
+  -SourceHost <source-ip> `
+  -DestHost <dest-ip> `
+  -Workers 8 `
+  -KeyPath "$HOME\.ssh\id_ed25519"
+```
 
 ## Top Arm (GPU Node A, Azure prebuilt subset)
 ```bash
@@ -136,6 +150,10 @@ source ~/.bashrc
 ps -ef | grep -E 'torchrun|scripts.base_train' | grep -v grep
 nvidia-smi
 ```
+- `base_train.py: error: unrecognized arguments: --cdpk-*`:
+  - The host is using a `scripts/base_train.py` without CDPK extensions. Sync the patched file from a known-good training host before launch.
+- A100 warning about FA3/SDPA + `window_pattern='SSSL'`:
+  - Expected on A100 (no FA3). Config parity is preserved, but throughput will be much lower than H100.
 
 ## Feb 18, 2026 Multi-GPU Postmortem (Top16 d26 8x H100)
 Root cause that caused the apparent hang:

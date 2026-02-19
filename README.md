@@ -33,6 +33,7 @@ Training (1x H100/GH200)
 | `calc_subset_iterations.py` | Compute full-subset token budget and training iterations |
 | `run_experiment_arm.sh` | Run one experiment arm from a prebuilt Azure subset prefix |
 | `run_experiment_hf_random_arm.sh` | Run HF random arm (`prepare` or `skip` sharding mode) |
+| `transfer_shards_parallel.ps1` | Copy shards host-to-host with SSH key + parallel rsync |
 | `EXPERIMENT_PLAYBOOK.md` | Recommended end-to-end workflow and troubleshooting |
 | `RUN_TRACKING.md` | Tracking sheet for active runs, split runs, and headline metrics |
 
@@ -90,6 +91,18 @@ Notes:
 - For cost efficiency, prepare HF random shards on a CPU/storage node, then run GPU training with `--prepare-mode skip`.
 - For retries on the same machine, use `--skip-download` to reuse existing `shard_*.parquet` and avoid re-downloading.
 - `patch_nanochat.py` also patches TF32 config to avoid torch.compile/inductor TF32 API mismatch crashes.
+- If shards do not contain `token_count` (e.g. only `score,text`), set `--num-iterations` explicitly.
+- On A100, Flash Attention 3 is unavailable, and `window_pattern='SSSL'` is significantly slower than on H100.
+
+## Host-To-Host Shard Transfer
+
+```powershell
+powershell -File .\transfer_shards_parallel.ps1 `
+  -SourceHost 192.222.58.132 `
+  -DestHost 129.153.201.219 `
+  -Workers 8 `
+  -KeyPath "$HOME\.ssh\id_ed25519"
+```
 
 ## Quality Sorting
 
