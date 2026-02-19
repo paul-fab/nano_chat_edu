@@ -36,8 +36,8 @@ This sheet tracks the main experiment lines:
 | Run label | Latest training step seen | Best validation bpb seen | Best CORE seen | Best CDPK seen | Notes |
 |---|---:|---:|---:|---:|---|
 | top50 (`zoebqeam`) | 9195 | 0.628162 (step 9196) | 0.2249 (step 9000) | 0.2892 (260/899, step 2000) | CDPK/CORE every 1000 steps |
-| top20 (`pb0ezqrx`) | 10718 | 0.581783 (step 9196) | 0.2400 (step 9196) | 0.2881 (259/899, step 5000) | CDPK/CORE every 1000 steps |
-| full-filtered split (`dbwtodle` + `n9hithr0` + `bk8zeag4`) | 33185 (latest phase) | 0.590568 (step 32750) | 0.2422 (step 31000) | 0.3026 (272/899, step 21000) | Phase A reached step 2347; phase B resumed at 2000; phase C resumed at 12000 |
+| top20 (`pb0ezqrx`) | 10908 | 0.581783 (step 9196) | 0.2400 (step 9196) | 0.2881 (259/899, step 5000) | CDPK/CORE every 1000 steps |
+| full-filtered split (`dbwtodle` + `n9hithr0` + `bk8zeag4`) | 33999 (latest phase) | 0.589920 (step 33500) | 0.2474 (step 34000) | 0.3026 (272/899, step 21000) | Phase A reached step 2347; phase B resumed at 2000; phase C resumed at 12000 |
 | random-8gpu split (`aw30lam9` + `4ul335c6`) | 19391 | 0.788619 (step 19250) | 0.2636 (step 19000) | 0.2948 (265/899, step 13000) | Phase A reached step 1740, then resumed from checkpoint 1000 in phase B |
 
 ## Milestone Table (fill as runs progress)
@@ -126,6 +126,7 @@ Use this for side-by-side comparisons at common checkpoints.
 | top20 | 10000 | 0.619237 | 0.2083 | 0.2814 | |
 | top20 | 10250 | 0.620513 | n/a | n/a | |
 | top20 | 10500 | 0.614135 | 0.2230 | n/a | |
+| top20 | 10750 | 0.612800 | n/a | n/a | |
 | full-filtered (split) | 250 | 0.898655 | n/a | n/a | phase A |
 | full-filtered (split) | 500 | 0.782442 | n/a | n/a | phase A |
 | full-filtered (split) | 750 | 0.745609 | n/a | n/a | phase A |
@@ -258,6 +259,10 @@ Use this for side-by-side comparisons at common checkpoints.
 | full-filtered (split) | 32500 | 0.591380 | n/a | n/a | phase C |
 | full-filtered (split) | 32750 | 0.590568 | n/a | n/a | phase C |
 | full-filtered (split) | 33000 | 0.590626 | 0.2348 | 0.2825 | phase C |
+| full-filtered (split) | 33250 | 0.591019 | n/a | n/a | phase C |
+| full-filtered (split) | 33500 | 0.589920 | n/a | n/a | phase C |
+| full-filtered (split) | 33750 | 0.590125 | n/a | n/a | phase C |
+| full-filtered (split) | 34000 | 0.590357 | 0.2474 | n/a | phase C |
 | random-8gpu (split) | 250 | 1.151184 | n/a | n/a | phase A |
 | random-8gpu (split) | 500 | 1.035174 | n/a | n/a | phase A |
 | random-8gpu (split) | 750 | 0.991594 | n/a | n/a | phase A |
@@ -335,6 +340,126 @@ Use this for side-by-side comparisons at common checkpoints.
 | random-8gpu (split) | 18750 | 0.790843 | n/a | n/a | phase B |
 | random-8gpu (split) | 19000 | 0.789740 | 0.2636 | 0.2636 | phase B |
 | random-8gpu (split) | 19250 | 0.788619 | n/a | n/a | phase B |
+
+## Detailed Evaluation Breakdown (Latest)
+
+Per-task scores for the most recent evaluation checkpoint of each run.
+CORE = mean of centered scores across all tasks.
+
+### top50 (step 9196)
+
+| Task | Shots | Type | Accuracy | Centered |
+|---|---:|---|---:|---:|
+| hellaswag_zeroshot | 0 | multiple_choice | 0.5420 | 0.3893 |
+| jeopardy | 10 | language_modeling | 0.0220 | 0.0220 |
+| bigbench_qa_wikidata | 10 | language_modeling | 0.2860 | 0.2860 |
+| arc_easy | 10 | multiple_choice | 0.7120 | 0.6160 |
+| arc_challenge | 10 | multiple_choice | 0.4200 | 0.2267 |
+| copa | 0 | multiple_choice | 0.7000 | 0.4000 |
+| commonsense_qa | 10 | multiple_choice | 0.2440 | 0.0550 |
+| piqa | 10 | multiple_choice | 0.7480 | 0.4960 |
+| openbook_qa | 0 | multiple_choice | 0.3940 | 0.1920 |
+| lambada_openai | 0 | language_modeling | 0.3460 | 0.3460 |
+| hellaswag | 10 | multiple_choice | 0.5320 | 0.3760 |
+| winograd | 0 | schema | 0.6777 | 0.3553 |
+| winogrande | 0 | schema | 0.5320 | 0.0640 |
+| bigbench_dyck_languages | 10 | language_modeling | 0.1160 | 0.1160 |
+| agi_eval_lsat_ar | 3 | multiple_choice | 0.2261 | 0.0326 |
+| bigbench_cs_algorithms | 10 | language_modeling | 0.3760 | 0.3760 |
+| bigbench_operators | 10 | language_modeling | 0.1571 | 0.1571 |
+| bigbench_repeat_copy_logic | 10 | language_modeling | 0.0000 | 0.0000 |
+| squad | 10 | language_modeling | 0.2040 | 0.2040 |
+| coqa | 0 | language_modeling | 0.2100 | 0.2100 |
+| boolq | 10 | multiple_choice | 0.5520 | -0.1789 |
+| bigbench_language_identification | 10 | multiple_choice | 0.2580 | 0.1837 |
+| **CORE (mean centered)** | | | | **0.2239** |
+
+### top20 (step 10500)
+
+| Task | Shots | Type | Accuracy | Centered |
+|---|---:|---|---:|---:|
+| hellaswag_zeroshot | 0 | multiple_choice | 0.5200 | 0.3600 |
+| jeopardy | 10 | language_modeling | 0.0100 | 0.0100 |
+| bigbench_qa_wikidata | 10 | language_modeling | 0.3220 | 0.3220 |
+| arc_easy | 10 | multiple_choice | 0.6960 | 0.5947 |
+| arc_challenge | 10 | multiple_choice | 0.4260 | 0.2347 |
+| copa | 0 | multiple_choice | 0.6300 | 0.2600 |
+| commonsense_qa | 10 | multiple_choice | 0.3200 | 0.1500 |
+| piqa | 10 | multiple_choice | 0.7320 | 0.4640 |
+| openbook_qa | 0 | multiple_choice | 0.3840 | 0.1787 |
+| lambada_openai | 0 | language_modeling | 0.3520 | 0.3520 |
+| hellaswag | 10 | multiple_choice | 0.5220 | 0.3627 |
+| winograd | 0 | schema | 0.6813 | 0.3626 |
+| winogrande | 0 | schema | 0.5160 | 0.0320 |
+| bigbench_dyck_languages | 10 | language_modeling | 0.1080 | 0.1080 |
+| agi_eval_lsat_ar | 3 | multiple_choice | 0.3130 | 0.1413 |
+| bigbench_cs_algorithms | 10 | language_modeling | 0.4160 | 0.4160 |
+| bigbench_operators | 10 | language_modeling | 0.1190 | 0.1190 |
+| bigbench_repeat_copy_logic | 10 | language_modeling | 0.0000 | 0.0000 |
+| squad | 10 | language_modeling | 0.1020 | 0.1020 |
+| coqa | 0 | language_modeling | 0.1920 | 0.1920 |
+| boolq | 10 | multiple_choice | 0.6140 | -0.0158 |
+| bigbench_language_identification | 10 | multiple_choice | 0.2360 | 0.1595 |
+| **CORE (mean centered)** | | | | **0.2230** |
+
+### full-filtered (split) (step 34000)
+
+| Task | Shots | Type | Accuracy | Centered |
+|---|---:|---|---:|---:|
+| hellaswag_zeroshot | 0 | multiple_choice | 0.5580 | 0.4107 |
+| jeopardy | 10 | language_modeling | 0.0400 | 0.0400 |
+| bigbench_qa_wikidata | 10 | language_modeling | 0.3360 | 0.3360 |
+| arc_easy | 10 | multiple_choice | 0.6980 | 0.5973 |
+| arc_challenge | 10 | multiple_choice | 0.4040 | 0.2053 |
+| copa | 0 | multiple_choice | 0.7000 | 0.4000 |
+| commonsense_qa | 10 | multiple_choice | 0.3440 | 0.1800 |
+| piqa | 10 | multiple_choice | 0.7160 | 0.4320 |
+| openbook_qa | 0 | multiple_choice | 0.4060 | 0.2080 |
+| lambada_openai | 0 | language_modeling | 0.3300 | 0.3300 |
+| hellaswag | 10 | multiple_choice | 0.5360 | 0.3813 |
+| winograd | 0 | schema | 0.6667 | 0.3333 |
+| winogrande | 0 | schema | 0.5820 | 0.1640 |
+| bigbench_dyck_languages | 10 | language_modeling | 0.1100 | 0.1100 |
+| agi_eval_lsat_ar | 3 | multiple_choice | 0.2609 | 0.0761 |
+| bigbench_cs_algorithms | 10 | language_modeling | 0.4160 | 0.4160 |
+| bigbench_operators | 10 | language_modeling | 0.1762 | 0.1762 |
+| bigbench_repeat_copy_logic | 10 | language_modeling | 0.0312 | 0.0312 |
+| squad | 10 | language_modeling | 0.2420 | 0.2420 |
+| coqa | 0 | language_modeling | 0.1840 | 0.1840 |
+| boolq | 10 | multiple_choice | 0.6300 | 0.0263 |
+| bigbench_language_identification | 10 | multiple_choice | 0.2400 | 0.1639 |
+| **CORE (mean centered)** | | | | **0.2474** |
+
+### random-8gpu (split) (step 19000)
+
+| Task | Shots | Type | Accuracy | Centered |
+|---|---:|---|---:|---:|
+| hellaswag_zeroshot | 0 | multiple_choice | 0.4940 | 0.3253 |
+| jeopardy | 10 | language_modeling | 0.2320 | 0.2320 |
+| bigbench_qa_wikidata | 10 | language_modeling | 0.5500 | 0.5500 |
+| arc_easy | 10 | multiple_choice | 0.6560 | 0.5413 |
+| arc_challenge | 10 | multiple_choice | 0.3560 | 0.1413 |
+| copa | 0 | multiple_choice | 0.7100 | 0.4200 |
+| commonsense_qa | 10 | multiple_choice | 0.3820 | 0.2275 |
+| piqa | 10 | multiple_choice | 0.7220 | 0.4440 |
+| openbook_qa | 0 | multiple_choice | 0.3980 | 0.1973 |
+| lambada_openai | 0 | language_modeling | 0.4460 | 0.4460 |
+| hellaswag | 10 | multiple_choice | 0.4960 | 0.3280 |
+| winograd | 0 | schema | 0.6557 | 0.3114 |
+| winogrande | 0 | schema | 0.5760 | 0.1520 |
+| bigbench_dyck_languages | 10 | language_modeling | 0.1440 | 0.1440 |
+| agi_eval_lsat_ar | 3 | multiple_choice | 0.2391 | 0.0489 |
+| bigbench_cs_algorithms | 10 | language_modeling | 0.4080 | 0.4080 |
+| bigbench_operators | 10 | language_modeling | 0.1381 | 0.1381 |
+| bigbench_repeat_copy_logic | 10 | language_modeling | 0.0312 | 0.0312 |
+| squad | 10 | language_modeling | 0.3620 | 0.3620 |
+| coqa | 0 | language_modeling | 0.2320 | 0.2320 |
+| boolq | 10 | multiple_choice | 0.5840 | -0.0947 |
+| bigbench_language_identification | 10 | multiple_choice | 0.2860 | 0.2145 |
+| **CORE (mean centered)** | | | | **0.2636** |
+
+Full evaluation history across all steps is saved to `eval_results.json`
+when the update script runs.
 
 ## Update Procedure
 

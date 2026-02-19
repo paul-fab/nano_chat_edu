@@ -75,6 +75,10 @@ RE_ITER_FIXED = re.compile(r"Using user-provided number of iterations:\s*([0-9,]
 RE_TOKENS = re.compile(r"Total number of training tokens:\s*([0-9,]+)")
 RE_BATCH_AUTO = re.compile(r"Auto-computed optimal batch size:\s*([0-9,]+)\s+tokens")
 RE_BATCH_TOTAL = re.compile(r"Total batch size\s*([0-9,]+)\s*=>")
+RE_EVAL_TASK = re.compile(
+    r"Evaluating:\s+(\S+)\s+\((\d+)-shot,\s+type:\s+(\w+)\)\.\.\.\s+"
+    r"accuracy:\s+([0-9.-]+)\s+\|\s+centered:\s+([0-9.-]+)"
+)
 
 
 def run_ssh(host: str, remote_cmd: str) -> str:
@@ -126,6 +130,23 @@ def parse_log_metrics(log_text: str) -> Dict[str, object]:
         milestones.setdefault(s, {})["core"] = v
     for s, v, n, d in cdpks:
         milestones.setdefault(s, {})["cdpk"] = {"acc": v, "n": n, "d": d}
+
+    pending_eval_tasks: List[Dict[str, object]] = []
+    for line in log_text.splitlines():
+        em = RE_EVAL_TASK.search(line)
+        if em:
+            pending_eval_tasks.append({
+                "task": em.group(1),
+                "shots": int(em.group(2)),
+                "type": em.group(3),
+                "accuracy": float(em.group(4)),
+                "centered": float(em.group(5)),
+            })
+        cm = RE_CORE.search(line)
+        if cm and pending_eval_tasks:
+            step = int(cm.group(1))
+            milestones.setdefault(step, {})["eval_tasks"] = pending_eval_tasks
+            pending_eval_tasks = []
 
     best_val = min(vals, key=lambda x: x[1]) if vals else None
     best_core = max(cores, key=lambda x: x[1]) if cores else None
@@ -348,6 +369,16 @@ def build_markdown(rows: List[Dict[str, object]]) -> str:
     md.extend(milestone_rows_for_split(split))
     md.extend(milestone_rows_for_split(random8))
     md.append("")
+    md.append("## Detailed Evaluation Breakdown (Latest)")
+    md.append("")
+    md.append("Per-task scores for the most recent evaluation checkpoint of each run.")
+    md.append("CORE = mean of centered scores across all tasks.")
+    md.append("")
+    for r in [top50, top20, split, random8]:
+        md.extend(_latest_eval_table(r))
+    md.append("Full evaluation history across all steps is saved to `eval_results.json`")
+    md.append("when the update script runs.")
+    md.append("")
     md.append("## Update Procedure")
     md.append("")
     md.append("1. Run `python update_run_tracking.py` from this repository root.")
@@ -355,6 +386,32 @@ def build_markdown(rows: List[Dict[str, object]]) -> str:
     md.append("3. Commit when the refresh looks correct.")
     md.append("")
     return "\n".join(md) + "\n"
+
+
+def _latest_eval_table(r: Dict[str, object]) -> List[str]:
+    milestones: Dict[int, Dict[str, object]] = r["metrics"]["milestones"]
+    eval_steps = sorted(s for s in milestones if "eval_tasks" in milestones.get(s, {}))
+    if not eval_steps:
+        return [f"### {r['label']}", "", "No detailed evaluation data available.", ""]
+
+    latest_step = eval_steps[-1]
+    tasks = milestones[latest_step]["eval_tasks"]
+    core = milestones[latest_step].get("core")
+
+    lines: List[str] = []
+    lines.append(f"### {r['label']} (step {latest_step})")
+    lines.append("")
+    lines.append("| Task | Shots | Type | Accuracy | Centered |")
+    lines.append("|---|---:|---|---:|---:|")
+    for t in tasks:
+        lines.append(
+            f"| {t['task']} | {t['shots']} | {t['type']} "
+            f"| {t['accuracy']:.4f} | {t['centered']:.4f} |"
+        )
+    if core is not None:
+        lines.append(f"| **CORE (mean centered)** | | | | **{core:.4f}** |")
+    lines.append("")
+    return lines
 
 
 def collect_run(spec: RunSpec) -> Dict[str, object]:
@@ -393,12 +450,42 @@ def collect_run(spec: RunSpec) -> Dict[str, object]:
     }
 
 
+def build_eval_json(rows: List[Dict[str, object]]) -> Dict[str, object]:
+    result: Dict[str, object] = {}
+    for r in rows:
+        milestones: Dict[int, Dict[str, object]] = r["metrics"]["milestones"]
+        eval_steps: Dict[str, object] = {}
+        for step in sorted(milestones):
+            m = milestones[step]
+            if "eval_tasks" not in m:
+                continue
+            eval_steps[str(step)] = {
+                "core": m.get("core"),
+                "val_bpb": m.get("val"),
+                "cdpk": m.get("cdpk"),
+                "tasks": m["eval_tasks"],
+            }
+        result[r["label"]] = {
+            "wandb_name": r["wandb_name"],
+            "run_ids": r["run_ids"],
+            "host": r["host"],
+            "data_variant": r["data_variant"],
+            "eval_steps": eval_steps,
+        }
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Update RUN_TRACKING.md from remote logs.")
     parser.add_argument(
         "--output",
         default="RUN_TRACKING.md",
         help="Output markdown path (default: RUN_TRACKING.md)",
+    )
+    parser.add_argument(
+        "--eval-json",
+        default="eval_results.json",
+        help="Output JSON path for full eval history (default: eval_results.json)",
     )
     args = parser.parse_args()
 
@@ -410,6 +497,11 @@ def main() -> int:
     with open(args.output, "w", encoding="utf-8", newline="\n") as f:
         f.write(md)
     print(f"Wrote {args.output}")
+
+    eval_data = build_eval_json(rows)
+    with open(args.eval_json, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(eval_data, f, indent=2)
+    print(f"Wrote {args.eval_json}")
     return 0
 
 
